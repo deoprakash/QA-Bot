@@ -22,3 +22,5 @@ PyPDF2
 
 # Streamlit (required for deployment)
 streamlit
+
+streamlit_autorefresh
