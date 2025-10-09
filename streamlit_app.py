@@ -219,13 +219,15 @@ Answer (be concise and cite the source when possible):
 def main():
     client, db, collection, model = init_connections()
     
-    # ✅ Explicit None checks (do not use all([...]))
+    # Explicit None checks
     if client is None or db is None or collection is None or model is None:
         st.stop()
 
     st.title("📚 PDF Q&A System with MongoDB Vector Search")
     st.sidebar.title("🔧 System Status")
-    doc_count = collection.count_documents({}) if collection else 0
+
+    # ✅ Fix here
+    doc_count = collection.count_documents({}) if collection is not None else 0
     st.sidebar.metric("📄 Documents in DB", doc_count)
 
     tab1, tab2, tab3 = st.tabs(["📤 Upload & Process", "❓ Ask Questions", "📊 Database Info"])
@@ -238,7 +240,7 @@ def main():
             for file in uploaded_files:
                 chunks = extract_text_from_pdf(file)
                 all_chunks.extend(chunks)
-            if all_chunks:
+            if all_chunks and collection is not None:
                 create_embeddings(all_chunks, model, collection)
 
     with tab2:
@@ -257,7 +259,7 @@ def main():
     with tab3:
         st.header("📊 Database Info")
         st.write(f"Total documents: {doc_count}")
-        if st.button("🗑️ Clear All Documents") and collection:
+        if collection is not None and st.button("🗑️ Clear All Documents"):
             collection.delete_many({})
             st.success("Database cleared.")
 
