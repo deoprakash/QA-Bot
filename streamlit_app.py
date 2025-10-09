@@ -157,7 +157,7 @@ def vector_search(query_text: str, model, collection, k: int = 5) -> List[Dict]:
         return []
 
 def query_groq(prompt: str) -> str:
-    """Query Groq API safely with error handling."""
+    """Query Groq API safely."""
     try:
         groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
@@ -218,7 +218,9 @@ Answer (be concise and cite the source when possible):
 
 def main():
     client, db, collection, model = init_connections()
-    if not all([client, db, collection, model]):
+    
+    # ✅ Explicit None checks (do not use all([...]))
+    if client is None or db is None or collection is None or model is None:
         st.stop()
 
     st.title("📚 PDF Q&A System with MongoDB Vector Search")
@@ -255,7 +257,7 @@ def main():
     with tab3:
         st.header("📊 Database Info")
         st.write(f"Total documents: {doc_count}")
-        if st.button("🗑️ Clear All Documents"):
+        if st.button("🗑️ Clear All Documents") and collection:
             collection.delete_many({})
             st.success("Database cleared.")
 
