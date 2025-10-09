@@ -45,6 +45,7 @@ Create a `.env` file in your project root and add:
 ```bash
 MONGO_DB_URI=your_mongodb_connection_string
 GROQ_API_KEY=your_groq_api_key
+HUGGINGFACE_API_KEY=hugging_face_access_token
 ```
 
 ### 4️⃣ Run Streamlit App
@@ -93,10 +94,15 @@ pdf-qa-system/
 - Supports both **MongoDB Atlas** (cloud) and **local MongoDB**.  
 
 ---
+## ✨ Author
+
+**[Deo Prakash](https://www.linkedin.com/in/deo-prakash-152265225/)** 
+
+---
 
 ## 🧾 License
 
-This project is licensed under the MIT License.
+This project is licensed under the Apache License.
 
 ---
 
