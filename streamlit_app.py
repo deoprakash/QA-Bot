@@ -1,8 +1,5 @@
 import streamlit as st
 import pymongo
-from dotenv import load_dotenv
-import os
-import requests
 from sentence_transformers import SentenceTransformer
 import PyPDF2
 import io
@@ -11,9 +8,7 @@ import hashlib
 from datetime import datetime
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-
-# Load environment variables
-load_dotenv()
+import requests
 
 # Page configuration
 st.set_page_config(
@@ -33,15 +28,16 @@ if 'chat_history' not in st.session_state:
 def init_connections():
     """Initialize MongoDB connection and embedding model."""
     try:
-        # MongoDB connection
-        mongoDB_api = st.secrets["MONGO_DB_URI"]
+        mongoDB_api = st.secrets.get("MONGO_DB_URI")
+        if not mongoDB_api:
+            st.error("MONGO_DB_URI not found in Streamlit secrets.")
+            return None, None, None, None
+
         client = pymongo.MongoClient(mongoDB_api)
         db = client.pdf_qa_system
         collection = db.documents
 
-        # Embedding model
         model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-
         return client, db, collection, model
     except Exception as e:
         st.error(f"Failed to initialize connections: {e}")
@@ -52,7 +48,6 @@ def extract_text_from_pdf(pdf_file) -> List[Dict]:
     try:
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_file.read()))
         chunks = []
-
         for page_num, page in enumerate(pdf_reader.pages):
             text = page.extract_text() or ""
             sentences = text.split('. ')
@@ -62,18 +57,10 @@ def extract_text_from_pdf(pdf_file) -> List[Dict]:
                     current_chunk += sentence + ". "
                 else:
                     if current_chunk:
-                        chunks.append({
-                            'text': current_chunk.strip(),
-                            'page': page_num + 1,
-                            'source': pdf_file.name
-                        })
+                        chunks.append({'text': current_chunk.strip(), 'page': page_num + 1, 'source': pdf_file.name})
                     current_chunk = sentence + ". "
             if current_chunk:
-                chunks.append({
-                    'text': current_chunk.strip(),
-                    'page': page_num + 1,
-                    'source': pdf_file.name
-                })
+                chunks.append({'text': current_chunk.strip(), 'page': page_num + 1, 'source': pdf_file.name})
         return chunks
     except Exception as e:
         st.error(f"Error extracting text from PDF: {e}")
@@ -170,18 +157,15 @@ def vector_search(query_text: str, model, collection, k: int = 5) -> List[Dict]:
         return []
 
 def query_groq(prompt: str) -> str:
-    """Query Groq API safely with error handling and correct payload."""
+    """Query Groq API safely with error handling."""
     try:
-        groq_api_key = st.secrets["GROQ_API_KEY"]
+        groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
-            st.error("GROQ_API_KEY not found in environment variables.")
+            st.error("GROQ_API_KEY not found in Streamlit secrets.")
             return "Error: GROQ_API_KEY not configured."
 
         url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {groq_api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"}
         data = {
             "model": "llama-3.1-8b-instant",
             "messages": [{"role": "user", "content": prompt}],
@@ -190,65 +174,35 @@ def query_groq(prompt: str) -> str:
         }
 
         response = requests.post(url, headers=headers, json=data, timeout=30)
-        
-        if response.status_code == 400:
-            error_detail = response.json().get('error', {}).get('message', 'No details')
-            st.error(f"Groq API Bad Request (400): {error_detail}")
-            return f"Error: The request was malformed. Details: {error_detail}"
-        
-        response.raise_for_status() 
-        
+        response.raise_for_status()
         result = response.json()
         return result.get("choices", [{}])[0].get("message", {}).get("content", "No answer from API.")
-
-    except requests.exceptions.HTTPError as http_err:
-        st.error(f"Groq API HTTP Error: {http_err} - {response.text}")
-        return f"Error querying Groq API: {http_err}. Returning placeholder answer."
     except Exception as e:
-        st.error(f"An unexpected error occurred while querying Groq: {e}")
+        st.error(f"Error querying Groq API: {e}")
         return f"Error querying Groq API: {e}. Returning placeholder answer."
-    
-def answer_question(question: str, model, collection) -> tuple:
-    """Answer question using RAG, with controlled context size."""
-    # Perform vector search, retrieve a few more documents than we might need
-    search_results = vector_search(question, model, collection, k=5) 
-    
-    if not search_results:
-        return "No relevant documents found. Please upload and process some PDF documents first.", []
-    
-    # Prepare context, but dynamically limit its size to avoid API errors
-    context_parts = []
-    total_context_length = 0
-    # The llama-3.1-8b-instant model has an 8k token context window. 
-    # We'll use a character limit as a safe approximation.
-    max_context_length = 7000 
 
-    used_sources = []
+def answer_question(question: str, model, collection) -> tuple:
+    """Answer question using RAG, with context control."""
+    search_results = vector_search(question, model, collection, k=5)
+    if not search_results:
+        return "No relevant documents found. Upload PDFs first.", []
+
+    context_parts, total_length, used_sources = [], 0, []
+    max_context_length = 7000
+
     for doc in search_results:
         text = doc.get('text', '')
-        
-        # Stop adding documents if the context is getting too long
-        if total_context_length + len(text) > max_context_length:
-            break 
-
-        page = doc.get('page', 'Unknown')
-        source = doc.get('source', 'Unknown')
-        score = doc.get('score', 0)
-        
-        context_parts.append(f"Document (Page {page}")
-        context_parts.append(f"Source: {source}")
-        context_parts.append(f"Content: {text}")
-        context_parts.append("---")
-        
-        total_context_length += len(text)
+        if total_length + len(text) > max_context_length:
+            break
+        page, source, score = doc.get('page', 'Unknown'), doc.get('source', 'Unknown'), doc.get('score', 0)
+        context_parts.append(f"Document (Page {page})\nSource: {source}\nContent: {text}\n---")
+        total_length += len(text)
         used_sources.append(doc)
-    
+
     if not context_parts:
-         return "Could not find any documents small enough to fit in the context window.", []
+        return "Could not fit any documents in context window.", []
 
     context = "\n".join(context_parts)
-    
-    # Create prompt
     prompt = f"""
 Based on the following document excerpts, answer the question. If the answer is not clearly in the documents, say so.
 
@@ -259,42 +213,31 @@ Question: {question}
 
 Answer (be concise and cite the source when possible):
 """
-    
-    # Get answer from Groq
     answer = query_groq(prompt)
-    
-    # Return the answer and only the sources that were actually used in the prompt
     return answer, used_sources
 
 def main():
     client, db, collection, model = init_connections()
-    if client is None or db is None or collection is None or model is None:
-        st.error("Failed to initialize connections.")
+    if not all([client, db, collection, model]):
         st.stop()
 
     st.title("📚 PDF Q&A System with MongoDB Vector Search")
     st.sidebar.title("🔧 System Status")
-
-    try:
-        doc_count = collection.count_documents({})
-        st.sidebar.metric("📄 Documents in DB", doc_count)
-    except:
-        doc_count = 0
+    doc_count = collection.count_documents({}) if collection else 0
+    st.sidebar.metric("📄 Documents in DB", doc_count)
 
     tab1, tab2, tab3 = st.tabs(["📤 Upload & Process", "❓ Ask Questions", "📊 Database Info"])
 
     with tab1:
         st.header("📤 Upload PDFs")
         uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
-        if uploaded_files:
-            st.write(f"{len(uploaded_files)} file(s) uploaded")
-            if st.button("🚀 Process PDFs"):
-                all_chunks = []
-                for file in uploaded_files:
-                    chunks = extract_text_from_pdf(file)
-                    all_chunks.extend(chunks)
-                if all_chunks:
-                    create_embeddings(all_chunks, model, collection)
+        if uploaded_files and st.button("🚀 Process PDFs"):
+            all_chunks = []
+            for file in uploaded_files:
+                chunks = extract_text_from_pdf(file)
+                all_chunks.extend(chunks)
+            if all_chunks:
+                create_embeddings(all_chunks, model, collection)
 
     with tab2:
         st.header("❓ Ask Questions")
@@ -305,10 +248,9 @@ def main():
             if st.button("🔍 Ask") and question:
                 answer, sources = answer_question(question, model, collection)
                 st.session_state.chat_history.append({'question': question, 'answer': answer, 'sources': sources})
-            if st.session_state.chat_history:
-                for chat in reversed(st.session_state.chat_history):
-                    st.write(f"**Q:** {chat['question']}")
-                    st.write(f"**A:** {chat['answer']}")
+            for chat in reversed(st.session_state.chat_history):
+                st.write(f"**Q:** {chat['question']}")
+                st.write(f"**A:** {chat['answer']}")
 
     with tab3:
         st.header("📊 Database Info")
