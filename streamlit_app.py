@@ -34,7 +34,7 @@ def init_connections():
     """Initialize MongoDB connection and embedding model."""
     try:
         # MongoDB connection
-        mongoDB_api = os.getenv("MONGO_DB_URI")
+        mongoDB_api = st.secrets["MONGO_DB_URI"]
         client = pymongo.MongoClient(mongoDB_api)
         db = client.pdf_qa_system
         collection = db.documents
@@ -172,7 +172,7 @@ def vector_search(query_text: str, model, collection, k: int = 5) -> List[Dict]:
 def query_groq(prompt: str) -> str:
     """Query Groq API safely with error handling and correct payload."""
     try:
-        groq_api_key = os.getenv("GROQ_API_KEY")
+        groq_api_key = st.secrets["GROQ_API_KEY"]
         if not groq_api_key:
             st.error("GROQ_API_KEY not found in environment variables.")
             return "Error: GROQ_API_KEY not configured."
