@@ -17,4 +17,8 @@ pymongo
 # HTTP requests
 requests
 
+# PDF handling
 PyPDF2
+
+# Streamlit (required for deployment)
+streamlit
