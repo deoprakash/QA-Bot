@@ -16,3 +16,5 @@ pymongo
 
 # HTTP requests
 requests
+
+PyPDF2
