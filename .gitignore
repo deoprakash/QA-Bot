@@ -1,0 +1,40 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.log
+
+# --- Virtual Environments ---
+.env
+.venv/
+myenv/
+env/
+venv/
+
+# --- Streamlit ---
+.streamlit/secrets.toml
+
+# --- IDEs and Editors ---
+.vscode/
+.idea/
+*.swp
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
+
+# --- Cache and Build Files ---
+build/
+dist/
+*.egg-info/
+
+# --- Notebooks Checkpoints ---
+.ipynb_checkpoints/
+
+# --- Hugging Face / API Credentials ---
+token.json
+hf_cache/
+hf_model/
+HUGGINGFACE_API_KEY

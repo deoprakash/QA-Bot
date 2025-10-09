@@ -1,0 +1,18 @@
+# LangChain packages
+langchain
+langchain-groq
+langchain-mongodb
+langchain-huggingface
+langchain-core
+
+# Vector store and embeddings
+sentence-transformers
+
+# Environment management
+python-dotenv
+
+# MongoDB driver
+pymongo
+
+# HTTP requests
+requests

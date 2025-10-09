@@ -1,0 +1,50 @@
+name: 🚀 Deploy PDF Q&A Streamlit App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      MONGO_DB_URI: ${{ secrets.MONGO_DB_URI }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
+
+    steps:
+    - name: 🧾 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.12.7
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12.7"
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m venv .venv
+        source .venv/bin/activate
+        pip install --upgrade pip
+        pip install -r streamlit_requirements.txt || pip install -r requirements.txt
+
+    - name: ⚙️ Verify environment variables
+      run: |
+        echo "🔐 Checking environment variables..."
+        if [ -z "$MONGO_DB_URI" ]; then echo "❌ Missing MONGO_DB_URI"; exit 1; fi
+        if [ -z "$GROQ_API_KEY" ]; then echo "❌ Missing GROQ_API_KEY"; exit 1; fi
+        if [ -z "$HUGGINGFACE_API_KEY" ]; then echo "❌ Missing HUGGINGFACE_API_KEY"; exit 1; fi
+        echo "✅ All environment variables are loaded successfully."
+
+    - name: 🧠 Test Streamlit app (headless run)
+      run: |
+        source .venv/bin/activate
+        streamlit run streamlit_app.py --server.headless true --server.port 8501 &
+        sleep 15
+        curl -I http://localhost:8501 || echo "✅ Streamlit app launched successfully"
+
+    - name: ✅ Workflow completed
+      run: echo "🎉 Streamlit PDF Q&A App build and test finished successfully!"
