@@ -23,6 +23,8 @@ if 'embeddings_created' not in st.session_state:
     st.session_state.embeddings_created = False
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
+if 'processing_complete' not in st.session_state:
+    st.session_state.processing_complete = False
 
 @st.cache_resource
 def init_connections():
@@ -102,7 +104,8 @@ def create_embeddings(chunks: List[Dict], model, collection) -> bool:
 
         progress_bar.empty()
         status_text.empty()
-        st.success(f"Successfully processed {len(chunks)} chunks. {inserted_count} new documents inserted.")
+        st.success(f"✅ Successfully processed {len(chunks)} chunks. {inserted_count} new documents inserted.")
+        st.info("🔄 Refreshing page... Your documents are ready for questions!")
         return True
     except Exception as e:
         st.error(f"Error creating embeddings: {e}")
@@ -239,22 +242,31 @@ def main():
 
     with tab1:
         st.header("📤 Upload PDFs")
+        
+        # Show processing completion message if just completed
+        if st.session_state.processing_complete:
+            st.success("✅ Processing complete! Your documents are ready for questions.")
+            st.session_state.processing_complete = False
+        
         uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
         if uploaded_files and st.button("🚀 Process PDFs"):
-            all_chunks = []
-            for file in uploaded_files:
-                chunks = extract_text_from_pdf(file)
-                all_chunks.extend(chunks)
-            if all_chunks and collection is not None:
-                success = create_embeddings(all_chunks, model, collection)
-                if success:
-                    st.success("Embeddings created successfully! Refreshing dashboard...")
-                    st.rerun()  # Force immediate refresh
+            with st.spinner("Processing PDFs..."):
+                all_chunks = []
+                for file in uploaded_files:
+                    chunks = extract_text_from_pdf(file)
+                    all_chunks.extend(chunks)
+                if all_chunks and collection is not None:
+                    success = create_embeddings(all_chunks, model, collection)
+                    if success:
+                        st.session_state.processing_complete = True
+                        import time
+                        time.sleep(1)  # Brief pause to show completion message
+                        st.rerun()  # Force immediate refresh
 
     with tab2:
         st.header("❓ Ask Questions")
         if doc_count == 0:
-            st.warning("No documents in DB.")
+            st.warning("⚠️ No documents in database. Please upload PDFs in the 'Upload & Process' tab first.")
         else:
             question = st.text_input("Enter your question:")
             if st.button("🔍 Ask") and question:
