@@ -260,6 +260,7 @@ def main():
         if st.button("🗑️ Clear All Documents") and collection:
             collection.delete_many({})
             st.success("Database cleared.")
+            st.rerun()  # Refresh after deletion
 
 if __name__ == "__main__":
     main()
