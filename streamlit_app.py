@@ -12,7 +12,7 @@ import requests
 
 # Page configuration
 st.set_page_config(
-    page_title="PDF Q&A System",
+    page_title="QuickQBot - PDF Q&A",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -43,6 +43,7 @@ def init_connections():
         st.error(f"Failed to initialize connections: {e}")
         return None, None, None, None
 
+
 def extract_text_from_pdf(pdf_file) -> List[Dict]:
     """Extract text from PDF and chunk it."""
     try:
@@ -65,6 +66,7 @@ def extract_text_from_pdf(pdf_file) -> List[Dict]:
     except Exception as e:
         st.error(f"Error extracting text from PDF: {e}")
         return []
+
 
 def create_embeddings(chunks: List[Dict], model, collection) -> bool:
     """Create embeddings and store in MongoDB."""
@@ -106,6 +108,7 @@ def create_embeddings(chunks: List[Dict], model, collection) -> bool:
         st.error(f"Error creating embeddings: {e}")
         return False
 
+
 def manual_vector_search(query_text: str, model, collection, k: int = 5) -> List[Dict]:
     """Manual vector search using cosine similarity."""
     try:
@@ -123,6 +126,7 @@ def manual_vector_search(query_text: str, model, collection, k: int = 5) -> List
     except Exception as e:
         st.error(f"Manual vector search error: {e}")
         return []
+
 
 def vector_search(query_text: str, model, collection, k: int = 5) -> List[Dict]:
     """Vector search with fallback to manual similarity."""
@@ -155,6 +159,7 @@ def vector_search(query_text: str, model, collection, k: int = 5) -> List[Dict]:
     except Exception as e:
         st.error(f"Vector search error: {e}")
         return []
+
 
 def query_groq(prompt: str) -> str:
     """Query Groq API safely."""
@@ -216,6 +221,7 @@ Answer (be concise and cite the source when possible):
     answer = query_groq(prompt)
     return answer, used_sources
 
+
 def main():
     client, db, collection, model = init_connections()
     
@@ -223,9 +229,10 @@ def main():
     if client is None or db is None or collection is None or model is None:
         st.stop()
 
-    st.title("📚 PDF Q&A System with MongoDB Vector Search")
+    st.title("📚 QuickQBot - PDF Q&A System")
     st.sidebar.title("🔧 System Status")
-    doc_count = collection.count_documents({}) if collection else 0
+
+    doc_count = collection.count_documents({}) if collection is not None else 0
     st.sidebar.metric("📄 Documents in DB", doc_count)
 
     tab1, tab2, tab3 = st.tabs(["📤 Upload & Process", "❓ Ask Questions", "📊 Database Info"])
@@ -238,8 +245,11 @@ def main():
             for file in uploaded_files:
                 chunks = extract_text_from_pdf(file)
                 all_chunks.extend(chunks)
-            if all_chunks:
-                create_embeddings(all_chunks, model, collection)
+            if all_chunks and collection is not None:
+                success = create_embeddings(all_chunks, model, collection)
+                if success:
+                    st.success("Embeddings created successfully! Refreshing dashboard...")
+                    st.rerun()  # Force immediate refresh
 
     with tab2:
         st.header("❓ Ask Questions")
@@ -256,8 +266,8 @@ def main():
 
     with tab3:
         st.header("📊 Database Info")
-        st.write(f"Total documents: {doc_count}")
-        if st.button("🗑️ Clear All Documents") and collection:
+        st.metric("Total documents", doc_count)
+        if collection is not None and st.button("🗑️ Clear All Documents"):
             collection.delete_many({})
             st.success("Database cleared.")
             st.rerun()  # Refresh after deletion
